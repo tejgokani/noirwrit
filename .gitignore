@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+.ruff_cache/
+.pytest_cache/
+
+# Secrets
+.env
+*.key
+kaggle.json
+
+# Large or generated data
+data/raw/
+data/clean/
+data/shards/
+artifacts/
+*.pt
+*.gguf
+*.bin
+*.safetensors
+*.sqlite
+*.db
+exports/
+logs/
+
+# macOS
+.DS_Store

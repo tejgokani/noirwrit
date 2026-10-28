@@ -1,0 +1,33 @@
+{
+  "answered_on": "2026-10-28",
+  "interface": "web",
+  "ui_features": {
+    "themes": ["dark", "light"],
+    "default_theme": "dark",
+    "reader_mode": true,
+    "chapter_sidebar": true,
+    "progress_eta_bar": true,
+    "keyboard_shortcuts": true,
+    "export_formats": ["pdf", "epub", "txt", "md"]
+  },
+  "open_source": {
+    "public": true,
+    "license": "MIT",
+    "repo": "github.com/tejgokani/noirwrit"
+  },
+  "project_name": "Noirwrit",
+  "dependency_policy": "own_model_plus_tiny_embedder",
+  "embedder": "sentence-transformers/all-MiniLM-L6-v2",
+  "training_data_policy": "public_domain_only",
+  "gpu": {
+    "primary": "kaggle",
+    "fallback": "runpod",
+    "fallback_budget_usd": 8
+  },
+  "max_budget_usd": 8,
+  "generation_defaults": {
+    "chapter_words": 3000,
+    "genre_mix": { "noir": 0.5, "classic_detective": 0.3, "thriller": 0.2 },
+    "language": "en"
+  }
+}
