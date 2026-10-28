@@ -1,27 +1,27 @@
 {
   "sets": {
     "general": {
-      "books": 185,
-      "words": 16158324,
-      "paras": 298366,
-      "paras_ok": 297605
+      "books": 341,
+      "words": 30275577,
+      "paras": 566844,
+      "paras_ok": 565496
     },
     "crime": {
-      "books": 76,
-      "words": 6416901,
-      "paras": 127566,
-      "paras_ok": 127324
+      "books": 1429,
+      "words": 101376894,
+      "paras": 2646874,
+      "paras_ok": 2639144
     },
     "noir": {
-      "books": 2,
-      "words": 242017,
-      "paras": 4467,
-      "paras_ok": 4454
+      "books": 58,
+      "words": 3004949,
+      "paras": 96147,
+      "paras_ok": 95684
     }
   },
   "tokens": {
-    "general": 21456416,
-    "crime": 8513410,
-    "noir": 336019
+    "general": 40811041,
+    "crime": 138436148,
+    "noir": 4206957
   }
 }
