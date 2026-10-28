@@ -25,3 +25,16 @@ Small and base rows use random weights in the exact trained layout; speed and me
 - Speed, at least 20 tok/s int8: **213.4 tok/s** with llama.cpp Q8_0 (pass).
 - Laptop RAM under 3 GB during generation: **0.259 GB** peak for llama.cpp (pass).
 - Chapter under 5 min for 3000 words (~4050 tokens): **0.3 min** of pure generation (pass). Prompt prefill per scene adds a few seconds.
+
+## ETA accuracy
+
+Model: `noirwrit-tiny-q8_0.gguf`, 4 chapters of 3000 words. The rolling tok/s is calibrated on chapter 1.
+
+| Chapter | Predicted | Actual | Error |
+|---|---|---|---|
+| 1 | calibrating | 6.0 s |  |
+| 2 | 6.0 s | 5.8 s | 4% |
+| 3 | 5.9 s | 6.1 s | 4% |
+| 4 | 6.1 s | 5.8 s | 4% |
+
+Worst error after calibration: **4%** (target under 20%: pass).
