@@ -38,6 +38,7 @@ class TorchGenerator(Generator):
         from noirwrit.tokenizer.train_tokenizer import load_tokenizer
 
         self.tok = load_tokenizer()
+        self.ckpt = str(ckpt)
         self.engine = Engine.from_checkpoint(ckpt, device=device, int8=int8)
         self.SampleParams = SampleParams
         self.sample_kw = sample_kw
@@ -66,33 +67,49 @@ class TorchGenerator(Generator):
 
 
 class LlamaCppGenerator(Generator):
-    """Runs a GGUF with llama.cpp in a subprocess. Offline, Metal accelerated."""
+    """Runs a GGUF with llama.cpp in a subprocess. Offline, Metal accelerated.
+
+    Output is read unbuffered and decoded incrementally, so tokens reach
+    on_token as llama.cpp prints them, not in blocks.
+    """
 
     name = "llama.cpp"
 
-    def __init__(self, gguf: str | Path, threads: int = 4, temperature: float = 0.85, top_p: float = 0.92,
-                 repeat_penalty: float = 1.15, ctx: int = 2048):
+    def __init__(self, gguf: str | Path, threads: int = 4, temperature: float = 0.75, top_p: float = 0.9,
+                 min_p: float = 0.05, top_k: int = 60, repeat_penalty: float = 1.12, repeat_last_n: int = 256,
+                 ctx: int = 2048):
         self.gguf = str(gguf)
         self.exe = shutil.which("llama-completion") or shutil.which("llama-cli")
         if not self.exe:
             raise RuntimeError("llama.cpp not found")
-        self.args = ["-t", str(threads), "--temp", str(temperature), "--top-p", str(top_p),
-                     "--repeat-penalty", str(repeat_penalty), "-c", str(ctx)]
+        self.args = ["-t", str(threads), "--temp", str(temperature), "--top-p", str(top_p), "--min-p", str(min_p),
+                     "--top-k", str(top_k), "--repeat-penalty", str(repeat_penalty),
+                     "--repeat-last-n", str(repeat_last_n), "-c", str(ctx)]
 
     def generate(self, prompt, max_tokens, seed=0, on_token=None):
+        import codecs
+        import os
+
         cmd = [self.exe, "-m", self.gguf, "-p", prompt, "-n", str(max_tokens), "-s", str(seed or 1),
                "--no-display-prompt", "-no-cnv", *self.args]
         t0 = time.perf_counter()
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace", bufsize=1)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
         assert proc.stdout is not None
+        fd = proc.stdout.fileno()
+        dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
         parts = []
         while True:
-            ch = proc.stdout.read(64)
-            if not ch:
+            chunk = os.read(fd, 4096)  # returns as soon as any bytes are available
+            if not chunk:
                 break
-            parts.append(ch)
-            if on_token:
-                on_token(ch)
+            piece = dec.decode(chunk)
+            if piece:
+                parts.append(piece)
+                if on_token:
+                    on_token(piece)
+        tail = dec.decode(b"", final=True)
+        if tail:
+            parts.append(tail)
         proc.wait()
         text = "".join(parts).replace("[end of text]", "").strip()
         n = self.count_tokens(text)

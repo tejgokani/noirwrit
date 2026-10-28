@@ -24,6 +24,8 @@ from noirwrit.planner.spec import Spec, fill
 
 PROMPT_BUDGET_TOKENS = 1100  # leaves room in a 2048 window for ~900 new tokens per scene
 MAX_SCENE_TRIES = 3
+LIVE_INTERVAL_S = 0.1
+CHUNK_TOKENS = 140  # best-of-N works on chunks this long
 
 Progress = Callable[[dict], None] | None
 
@@ -98,11 +100,49 @@ def _tidy(text: str) -> str:
 
 
 class StoryEngine:
-    def __init__(self, db: DB, memory: Memory, generator: Generator, novelty_retries: int = 1):
+    def __init__(self, db: DB, memory: Memory, generator: Generator, novelty_retries: int = 1, candidates: int = 1):
         self.db = db
         self.mem = memory
         self.gen = generator
         self.novelty_retries = novelty_retries
+        # Best-of-N per chunk: 1 = stream every token; 2 or 3 = write in chunks and keep the best.
+        self.candidates = max(1, candidates)
+        self._scorer = None
+        self._scorer_tried = False
+
+    def scorer(self):
+        """PyTorch scorer for the model in use, loaded once. None when no matching checkpoint exists."""
+        if not self._scorer_tried:
+            self._scorer_tried = True
+            from noirwrit.runtime.score import ModelScorer, find_scorer_ckpt
+
+            path = getattr(self.gen, "gguf", None) or getattr(self.gen, "ckpt", None)
+            ck = find_scorer_ckpt(path) if path else None
+            if ck:
+                try:
+                    self._scorer = ModelScorer(ck)
+                except Exception:
+                    self._scorer = None
+        return self._scorer
+
+    def _best_of(self, prompt: str, body: str, want: int, seed: int, on_token=None) -> tuple[str, int]:
+        """Generate `candidates` continuations of prompt + body and return the best one, cut at a sentence end."""
+        from noirwrit.runtime.score import combined
+
+        context = _tail(f"{prompt} {body}".strip(), int(PROMPT_BUDGET_TOKENS / 1.3) + 200)
+        best, best_score, used = "", -1e9, 0
+        for c in range(self.candidates):
+            raw, toks = self.gen.generate(context, want, seed=seed + 7919 * c, on_token=on_token)
+            used += toks
+            cand = _trim_to_sentence(raw) or raw.strip()
+            if not cand:
+                continue
+            sc = self.scorer()
+            lp = sc.mean_logprob(context, cand) if sc else None
+            score = combined(lp, cand)
+            if score > best_score:
+                best, best_score = cand, score
+        return best, used
 
     def build_prompt(self, spec: Spec, outline: Outline, bible: Bible, beat: Beat, prev_text: str,
                      prev_summary: str, story_id: int) -> str:
@@ -123,14 +163,46 @@ class StoryEngine:
         ctx = _tail(ctx, max(room, 50))
         return f"{ctx}\n\n{tail}\n\n{beat.lead}".strip() if tail else f"{ctx}\n\n{beat.lead}"
 
-    def write_scene(self, spec, outline, bible, beat, prev_text, prev_summary, story_id, seed, on_token=None) -> SceneResult:
+    def write_scene(self, spec, outline, bible, beat, prev_text, prev_summary, story_id, seed, on_token=None,
+                    on_live=None) -> SceneResult:
+        """on_token gets raw pieces; on_live gets the cleaned scene text so far, about 10 times a second."""
         t0 = time.time()
         issues = ""
         text, toks = "", 0
         for attempt in range(1, MAX_SCENE_TRIES + 1):
             prompt = self.build_prompt(spec, outline, bible, beat, prev_text, prev_summary, story_id)
             max_new = int(beat.target_words * 1.35)
-            raw, toks = self.gen.generate(prompt, max_new, seed=seed * 101 + attempt, on_token=on_token)
+            buf = [beat.lead, " "]
+            last = [0.0]
+
+            def tok(piece: str, buf=buf, last=last) -> None:
+                buf.append(piece)
+                if on_token:
+                    on_token(piece)
+                now = time.time()
+                if on_live and now - last[0] >= LIVE_INTERVAL_S:
+                    last[0] = now
+                    on_live(consistency.check(_tidy("".join(buf)), bible, beat).fixed_text)
+
+            if on_live:
+                on_live(beat.lead)  # a retry restarts the scene from its lead-in
+            if self.candidates == 1:
+                raw, toks = self.gen.generate(prompt, max_new, seed=seed * 101 + attempt, on_token=tok)
+            else:
+                # Chunked best-of-N. Only chosen text is published to the live stream.
+                body, toks, k = "", 0, 0
+                while toks < max_new:
+                    want = min(CHUNK_TOKENS, max_new - toks)
+                    piece, used = self._best_of(prompt + "\n\n" + beat.lead, body, want,
+                                                seed * 101 + attempt * 1009 + k * 31, on_token)
+                    toks += max(used // self.candidates, 1)
+                    k += 1
+                    if not piece:
+                        break
+                    body = f"{body} {piece}".strip()
+                    if on_live:
+                        on_live(consistency.check(_tidy(beat.lead + " " + body), bible, beat).fixed_text)
+                raw = body
             text = _tidy(beat.lead + " " + _trim_to_sentence(raw))
             rep = consistency.check(text, bible, beat)
             text = rep.fixed_text
@@ -175,8 +247,12 @@ class StoryEngine:
                 if progress:
                     progress({"event": "token", "chapter": chapter, "scene": b.num, "text": piece})
 
+            def on_live(text: str, b=beat) -> None:
+                if progress:
+                    progress({"event": "scene_live", "chapter": chapter, "scene": b.num, "text": text})
+
             res = self.write_scene(spec, outline, bible, beat, prev_text, prev_summary, story_id,
-                                   seed=spec.seed * 1000 + chapter * 50 + beat.num, on_token=on_tok)
+                                   seed=spec.seed * 1000 + chapter * 50 + beat.num, on_token=on_tok, on_live=on_live)
             bible.update_after_scene(beat, res.text)
             bible.save(self.db)
             self.db.execute(

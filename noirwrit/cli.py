@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from noirwrit import __version__
@@ -12,12 +13,90 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="noirwrit", description="Offline crime and noir chapter generator.")
     p.add_argument("--version", action="version", version=f"noirwrit {__version__}")
     sub = p.add_subparsers(dest="cmd")
-    sub.add_parser("info", help="show config and paths")
-    a = p.parse_args(argv)
-    if a.cmd == "info":
-        from noirwrit.config import load_requirements
 
-        print(load_requirements())
+    s = sub.add_parser("serve", help="run the local web app")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--no-browser", action="store_true")
+
+    sub.add_parser("worker", help="run the background generation worker")
+    sub.add_parser("info", help="show config, models and paths")
+
+    n = sub.add_parser("new", help="plan and write a story from the terminal")
+    n.add_argument("--chapters", type=int, default=3)
+    n.add_argument("--genre", default="noir")
+    n.add_argument("--words", type=int, default=3000)
+    n.add_argument("--seed", type=int, default=0)
+
+    e = sub.add_parser("export", help="export a story")
+    e.add_argument("story_id", type=int)
+    e.add_argument("--fmt", default="pdf", choices=["pdf", "epub", "txt", "md"])
+    e.add_argument("--page-size", default="6x9", choices=["A4", "Letter", "A5", "6x9"])
+    e.add_argument("--out", default="")
+
+    a = p.parse_args(argv)
+    if a.cmd == "serve":
+        from noirwrit.app.server import serve
+
+        serve(a.host, a.port, open_browser=not a.no_browser)
+        return 0
+    if a.cmd == "worker":
+        from noirwrit.worker import main as worker_main
+
+        return worker_main([])
+    if a.cmd == "info":
+        from noirwrit.config import HOME, load_requirements
+        from noirwrit.runtime.models import list_models
+
+        print(json.dumps({"version": __version__, "home": str(HOME), "models": list_models(),
+                          "requirements": load_requirements()}, indent=2))
+        return 0
+    if a.cmd == "new":
+        from noirwrit.config import HOME
+        from noirwrit.memory.db import DB
+        from noirwrit.memory.store import Memory
+        from noirwrit.planner.spec import Spec
+        from noirwrit.planner.story import StoryEngine, create_story
+        from noirwrit.runtime.models import load_generator
+
+        db = DB(HOME / "noirwrit.db")
+        sid = create_story(db, Spec(chapters=a.chapters, genre=a.genre, chapter_words=a.words, seed=a.seed))
+        eng = StoryEngine(db, Memory(db), load_generator(db))
+        print(f"story {sid}: {db.one('SELECT title FROM stories WHERE id=?', (sid,))['title']}", flush=True)
+
+        def show(ev: dict) -> None:
+            if ev["event"] == "token":
+                sys.stdout.write(ev["text"])
+                sys.stdout.flush()
+            elif ev["event"] == "scene_start":
+                print(f"\n\n[chapter {ev['chapter']}, scene {ev['scene']}/{ev['of']}]\n", flush=True)
+
+        eng.write_story(sid, progress=show)
+        print(f"\n\ndone: story {sid}")
+        return 0
+    if a.cmd == "export":
+        from pathlib import Path
+
+        from noirwrit.config import HOME
+        from noirwrit.export import books as ex
+        from noirwrit.memory.db import DB
+
+        db = DB(HOME / "noirwrit.db")
+        st = db.one("SELECT title FROM stories WHERE id=?", (a.story_id,))
+        rows = db.query("SELECT title, text FROM chapters WHERE story_id=? AND status='done' ORDER BY num", (a.story_id,))
+        if not st or not rows:
+            print("no finished chapters for that story", file=sys.stderr)
+            return 1
+        book = ex.Book(st["title"], [(r["title"], r["text"]) for r in rows])
+        out = Path(a.out or f"{st['title'].replace(' ', '_')}.{a.fmt}")
+        opts = ex.ExportOptions(page_size=a.page_size)
+        if a.fmt == "pdf":
+            ex.to_pdf(book, out, opts)
+        elif a.fmt == "epub":
+            ex.to_epub(book, out, opts)
+        else:
+            out.write_text(ex.to_txt(book) if a.fmt == "txt" else ex.to_md(book))
+        print(out)
         return 0
     p.print_help()
     return 0

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noirwrit</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar no-print" id="sidebar">
+    <div class="brand"><span class="mark">N</span> Noirwrit</div>
+    <nav class="nav">
+      <button data-view="new" title="New story (n)">New story</button>
+      <button data-view="library" title="Library (l)">Library</button>
+      <button data-view="reader" title="Reader (g)">Reader</button>
+      <button data-view="memory" title="Memory (m)">Memory</button>
+      <button data-view="settings" title="Settings (s)">Settings</button>
+    </nav>
+    <div class="chapters" id="chapterList" aria-label="Chapters"></div>
+    <div class="status" id="statusBox"></div>
+  </aside>
+
+  <main class="main" id="main">
+    <header class="topbar no-print">
+      <button class="icon" id="toggleSidebar" title="Toggle sidebar ([)">☰</button>
+      <div class="crumb" id="crumb"></div>
+      <div class="spacer"></div>
+      <button class="icon" id="readerModeBtn" title="Reader mode (r)">Reader mode</button>
+      <button class="icon" id="themeBtn" title="Theme (t)">Light</button>
+      <button class="icon" id="helpBtn" title="Shortcuts (?)">?</button>
+    </header>
+
+    <!-- New story -->
+    <section class="view" id="view-new">
+      <h1>New story</h1>
+      <p class="muted">Leave anything blank and Noirwrit picks it. Everything runs on this Mac.</p>
+      <form id="specForm" class="form"></form>
+      <div class="match hidden" id="matchBox"></div>
+      <div class="actions">
+        <button class="primary" id="createBtn">Write it</button>
+      </div>
+    </section>
+
+    <!-- Library -->
+    <section class="view" id="view-library">
+      <h1>Library</h1>
+      <div id="libraryList" class="cards"></div>
+    </section>
+
+    <!-- Reader -->
+    <section class="view" id="view-reader">
+      <div class="reader-head no-print">
+        <div>
+          <div class="eyebrow" id="readerStory"></div>
+          <h1 id="readerTitle">No story open</h1>
+        </div>
+        <div class="reader-actions">
+          <select id="exportFormat" title="Export format">
+            <option value="pdf">PDF</option><option value="epub">EPUB (Kindle)</option>
+            <option value="txt">TXT</option><option value="md">Markdown</option>
+          </select>
+          <select id="exportScope" title="Export scope">
+            <option value="book">Whole book</option><option value="chapter">This chapter</option>
+          </select>
+          <button id="exportBtn" title="Export (e)">Export</button>
+          <button id="printBtn" title="Print (p)">Print</button>
+          <button id="kindleBtn" title="Send to Kindle helper (k)">Kindle</button>
+        </div>
+      </div>
+      <div class="progress no-print hidden" id="progressBox">
+        <div class="bar"><div class="fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText"></div>
+        <div class="scenes" id="sceneDots"></div>
+      </div>
+      <button class="skip no-print hidden" id="skipTyping" title="Show the rest now (f)">Skip typing</button>
+      <article class="page" id="page">
+        <h2 class="chapter-title" id="chapterTitle"></h2>
+        <div id="chapterText" class="prose"></div>
+      </article>
+      <div class="pager no-print">
+        <button id="prevBtn" title="Previous chapter (←, k)">← Previous</button>
+        <span id="nextState" class="muted"></span>
+        <button id="nextBtn" class="primary" title="Next chapter (→, j)">Next chapter →</button>
+      </div>
+    </section>
+
+    <!-- Memory -->
+    <section class="view" id="view-memory">
+      <h1>Memory</h1>
+      <p class="muted">What Noirwrit remembers: every story's cast, clues and chapter summaries, plus any context you give it. It never leaves this Mac.</p>
+      <div class="panel">
+        <h3>Add context</h3>
+        <p class="muted small">Notes, a style sample, a whole manuscript. Any size; it is chunked and searched per scene.</p>
+        <textarea id="ingestText" rows="5" placeholder="Paste text here"></textarea>
+        <div class="row">
+          <input id="ingestSource" placeholder="Name (optional)">
+          <input id="ingestFile" type="file" accept=".txt,.md,.markdown,.json,.epub">
+          <button id="ingestBtn">Remember</button>
+        </div>
+        <div id="ingestResult" class="muted small"></div>
+      </div>
+      <div class="panel">
+        <h3>Search memory</h3>
+        <div class="row"><input id="memQuery" placeholder="e.g. who had the key to the cellar"><button id="memSearchBtn">Search</button></div>
+        <div id="memHits"></div>
+      </div>
+      <div id="memoryBody"></div>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" id="view-settings">
+      <h1>Settings</h1>
+      <form id="settingsForm" class="form">
+        <fieldset>
+          <legend>Model</legend>
+          <label>Model file <select name="model_path" id="modelSelect"></select></label>
+          <label>Speed vs quality
+            <select name="quality"><option value="fast">Fast</option><option value="balanced">Balanced</option><option value="quality">Quality</option></select>
+          </label>
+          <label class="check"><input type="checkbox" name="prefetch"> Write the next chapter while I read</label>
+        </fieldset>
+        <fieldset>
+          <legend>Reading</legend>
+          <label>Typing effect
+            <select name="ui_typing"><option value="live">While a chapter is being written</option><option value="always">Every chapter, the first time I open it</option><option value="off">Off, show text at once</option></select>
+          </label>
+          <label>Typing speed
+            <select name="ui_typingSpeed"><option value="slow">Slow (reading pace)</option><option value="natural">Natural</option><option value="fast">Fast</option><option value="instant">Instant</option></select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Thermal and memory limits</legend>
+          <label>Pause when hot (minutes) <input type="number" name="hot_pause_min" min="1" max="10"></label>
+          <label>RAM ceiling for generation (GB) <input type="number" name="max_rss_gb" min="1" max="9" step="0.5"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Export</legend>
+          <label>Default page size
+            <select name="page_size"><option>A4</option><option>Letter</option><option>A5</option><option value="6x9">6 x 9 in</option></select>
+          </label>
+          <label>Font size (pt) <input type="number" name="font_size_pt" min="8" max="16" step="0.5"></label>
+          <label class="check"><input type="checkbox" name="include_cover"> Include a typographic cover</label>
+          <label class="check"><input type="checkbox" name="include_toc"> Include a table of contents</label>
+          <label>Kindle folder <input name="kindle_folder"></label>
+        </fieldset>
+        <div class="actions"><button class="primary" type="submit">Save</button> <span id="settingsSaved" class="muted"></span></div>
+      </form>
+      <div class="panel muted small" id="aboutBox"></div>
+    </section>
+  </main>
+</div>
+
+<div class="modal hidden" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div id="modalBody"></div>
+    <div class="actions"><button id="modalClose">Close</button></div>
+  </div>
+</div>
+<div class="toast hidden" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -16,8 +16,9 @@ from noirwrit.planner.outline import Beat
 TITLES = r"(?:Mr|Mrs|Miss|Ms|Dr|Inspector|Sergeant|Lieutenant|Captain|Detective|Officer|Colonel|Lady|Lord|Sir|Father)"
 TITLED_NAME_RE = re.compile(rf"\b{TITLES}\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)")
 FULL_NAME_RE = re.compile(r"\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,})\b")
-SPEECH_RE = re.compile(r'"[^"]{2,300}?"\s*,?\s*(?:said|asked|told|answered|replied|whispered|snapped)\s+([A-Z][a-z]+)')
-SPEECH_RE2 = re.compile(r'([A-Z][a-z]+)\s+(?:said|asked|answered|replied|whispered|snapped)\b')
+SPEECH_VERBS = r"(?:said|says|asked|asks|told|answered|replied|whispered|snapped|cried|exclaimed|muttered|added|continued|went on|returned|growled|laughed)"
+SPEECH_RE = re.compile(rf'"[^"]{{2,300}}?"\s*,?\s*{SPEECH_VERBS}\s+([A-Z][a-z]+)')
+SPEECH_RE2 = re.compile(rf'([A-Z][a-z]+)\s+{SPEECH_VERBS}\b')
 
 # Words that look like names at the start of a phrase but are not people.
 NOT_NAMES = {
@@ -116,17 +117,19 @@ def check(text: str, bible: Bible, beat: Beat) -> Report:
     # character remembered from the training books) is mapped to someone in this beat.
     # Famous public domain characters are replaced wherever they appear.
     typo_from = {i.fix[0] for i in rep.issues if i.fix}
-    foreign: list[str] = []
+    # Order by first appearance, so the mapping stays stable while a scene streams in.
+    found: dict[str, int] = {}
     for rx in (SPEECH_RE, SPEECH_RE2, TITLED_NAME_RE):
         for m in rx.finditer(rep.fixed_text):
             for tok in m.group(1).split():
                 if tok not in known_tokens and tok not in NOT_NAMES and tok not in PRONOUNS and tok not in typo_from \
-                        and not re.fullmatch(TITLES, tok) \
-                        and tok not in foreign:
-                    foreign.append(tok)
-    for tok in sorted(FAMOUS & set(re.findall(r"\b[A-Z][a-z]+\b", rep.fixed_text))):
-        if tok not in known_tokens and tok not in foreign:
-            foreign.append(tok)
+                        and not re.fullmatch(TITLES, tok):
+                    found[tok] = min(found.get(tok, 1 << 30), m.start(1))
+    for m in re.finditer(r"\b[A-Z][a-z]+\b", rep.fixed_text):
+        tok = m.group(0)
+        if tok in FAMOUS and tok not in known_tokens:
+            found[tok] = min(found.get(tok, 1 << 30), m.start())
+    foreign = sorted(found, key=found.get)
     if foreign:
         def usable(n: str) -> bool:
             role = bible.characters[n]["role"]

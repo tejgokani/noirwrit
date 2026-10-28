@@ -68,7 +68,8 @@ def load_generator(db: DB | None = None, quality: str = "balanced") -> Generator
         pick = max(models, key=_rank)
     else:
         return EchoGenerator()
-    temp = {"fast": 0.8, "balanced": 0.85, "quality": 0.9}.get(quality, 0.85)
+    # Lower temperature reads more grammatical; best-of-N reranking adds the variety back.
+    temp = {"fast": 0.7, "balanced": 0.75, "quality": 0.8}.get(quality, 0.75)
     try:
         if pick["kind"] == "gguf":
             return LlamaCppGenerator(pick["path"], temperature=temp)

@@ -49,8 +49,34 @@ class GuardReport:
     duration_s: float = 0.0
 
 
+_libproc = None
+
+
+def phys_footprint(pid: int) -> int | None:
+    """macOS physical footprint of a process (what Activity Monitor shows).
+
+    Unlike RSS, this includes Metal/MPS GPU allocations in unified memory, so
+    it catches a PyTorch MPS job that is pushing the Mac into swap.
+    """
+    global _libproc
+    if sys.platform != "darwin":
+        return None
+    try:
+        import ctypes
+
+        if _libproc is None:
+            _libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+        # rusage_info_v2: 16-byte uuid, then uint64 fields; ri_phys_footprint is the 8th.
+        buf = (ctypes.c_uint64 * 32)()
+        if _libproc.proc_pid_rusage(pid, 2, ctypes.byref(buf)) != 0:
+            return None
+        return int(buf[2 + 7])
+    except Exception:
+        return None
+
+
 def tree_rss_bytes(proc: psutil.Process) -> int:
-    """RSS of a process and all its descendants."""
+    """Memory of a process and all its descendants: max(RSS, physical footprint) each."""
     total = 0
     try:
         procs = [proc, *proc.children(recursive=True)]
@@ -58,9 +84,11 @@ def tree_rss_bytes(proc: psutil.Process) -> int:
         return 0
     for p in procs:
         try:
-            total += p.memory_info().rss
+            rss = p.memory_info().rss
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            continue
+        fp = phys_footprint(p.pid) or 0
+        total += max(rss, fp)
     return total
 
 

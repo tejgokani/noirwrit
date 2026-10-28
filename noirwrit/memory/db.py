@@ -121,6 +121,14 @@ CREATE TABLE IF NOT EXISTS jobs (
     progress TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, priority, id);
+CREATE TABLE IF NOT EXISTS live (
+    story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    chapter_num INTEGER NOT NULL,
+    scene_num INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    updated REAL NOT NULL,
+    PRIMARY KEY (story_id, chapter_num)
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

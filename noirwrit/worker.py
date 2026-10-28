@@ -13,6 +13,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import os
 import signal
@@ -21,8 +22,10 @@ import sys
 import threading
 import time
 
+import psutil
+
 from noirwrit.config import HOME
-from noirwrit.guardrails import ThermalGate
+from noirwrit.guardrails import ThermalGate, tree_rss_bytes
 from noirwrit.memory.db import DB
 
 STALE_S = 60.0
@@ -129,9 +132,31 @@ class Worker:
                           "target": ev["target_tokens"], "t0": time.time()}
         elif ev["event"] == "token":
             self._live["tokens"] = self._live.get("tokens", 0) + max(1, len(ev["text"]) // 4)
+        elif ev["event"] == "scene_live" and self._job:
+            # The reader streams this row and types it out.
+            self.db.execute(
+                "INSERT INTO live(story_id, chapter_num, scene_num, text, updated) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(story_id, chapter_num) DO UPDATE SET scene_num=excluded.scene_num, text=excluded.text, "
+                "updated=excluded.updated",
+                (self._job["story_id"], ev["chapter"], ev["scene"], ev["text"], time.time()))
         elif ev["event"] == "scene_done":
             if ev["seconds"] > 0:
                 update_rate(self.db, ev["tokens"] / ev["seconds"])
+
+    def _between_scenes(self) -> None:
+        """Runs before every scene: thermal pause, then the RAM ceiling from Settings."""
+        saved = self.db.get_setting("hot_pause_min")
+        if saved:
+            self.thermal.hot_pause_s = float(saved) * 60
+        self.thermal.wait_if_hot()
+        limit_gb = float(self.db.get_setting("max_rss_gb", 3) or 3)
+        used = tree_rss_bytes(psutil.Process()) / 1024**3
+        if used > limit_gb:
+            # Drop the model and caches; the next scene reloads them. Saved scenes are safe.
+            print(f"[worker] memory {used:.2f} GB over the {limit_gb} GB ceiling; reloading the engine", file=sys.stderr, flush=True)
+            self.engine = None
+            gc.collect()
+            self.engine = self.engine_factory(self.db)
 
     def run_job(self, job: dict) -> None:
         if self.engine is None:
@@ -140,7 +165,7 @@ class Worker:
         self._job = job
         try:
             self.engine.write_chapter(sid, ch, progress=self._progress, should_stop=self._stop.is_set,
-                                      between_scenes=self.thermal.wait_if_hot)
+                                      between_scenes=self._between_scenes)
             self.db.execute("UPDATE jobs SET status='done', heartbeat=? WHERE id=?", (time.time(), job["id"]))
             if self.prefetch:
                 enqueue_chapter(self.db, sid, ch + 1, priority=1)
@@ -169,12 +194,14 @@ class Worker:
 
 
 def default_engine_factory(db: DB):
-    """Story engine on the best available local model."""
+    """Story engine on the best available local model, at the quality chosen in Settings."""
     from noirwrit.memory.store import Memory
     from noirwrit.planner.story import StoryEngine
     from noirwrit.runtime.models import load_generator
 
-    return StoryEngine(db, Memory(db), load_generator(db))
+    quality = db.get_setting("quality", "balanced") or "balanced"
+    candidates = {"fast": 1, "balanced": 1, "quality": 3}.get(quality, 1)
+    return StoryEngine(db, Memory(db), load_generator(db, quality=quality), candidates=candidates)
 
 
 def main(argv: list[str] | None = None) -> int:
