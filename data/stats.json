@@ -1,0 +1,27 @@
+{
+  "sets": {
+    "general": {
+      "books": 185,
+      "words": 16158324,
+      "paras": 298366,
+      "paras_ok": 297605
+    },
+    "crime": {
+      "books": 76,
+      "words": 6416901,
+      "paras": 127566,
+      "paras_ok": 127324
+    },
+    "noir": {
+      "books": 2,
+      "words": 242017,
+      "paras": 4467,
+      "paras_ok": 4454
+    }
+  },
+  "tokens": {
+    "general": 21456416,
+    "crime": 8513410,
+    "noir": 336019
+  }
+}
