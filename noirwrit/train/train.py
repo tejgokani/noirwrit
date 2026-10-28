@@ -106,7 +106,10 @@ def pick_dtype(device: str, pref: str = "auto") -> torch.dtype:
     if pref == "fp16":
         return torch.float16
     if device == "cuda":
-        return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        # bf16 only on Ampere and newer (sm80+). Older cards like the T4 report
+        # bf16 as supported but emulate it slowly; use fp16 with a GradScaler there.
+        major, _ = torch.cuda.get_device_capability()
+        return torch.bfloat16 if major >= 8 else torch.float16
     return torch.float32  # MPS autocast is still uneven; tiny runs do not need it
 
 
