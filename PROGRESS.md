@@ -14,7 +14,7 @@ Last updated 2026-10-29 (evening).
 | 8. Story engine | done | tiny model wrote a 5-chapter story end to end; checker catches a planted name error |
 | 9. Worker and ETA | done | SIGKILL mid-chapter then resume finishes without rewriting saved scenes; real ETA error 4% |
 | 10. Interface | done | all screens and live typing verified in the browser; full flow passes with the network blocked (14/14); EPUB passes epubcheck; 12-chapter PDF gates pass in four page sizes (`docs/GATES.md`) |
-| 11. Packaging | done; PyPI still to publish | fresh clone: `make setup`, `noirwrit install-model`, `make demo` writes and exports a chapter; 85 tests pass there; README, CI, issue templates, name check (`docs/NAME_CHECK.md`) |
+| 11. Packaging | done; v0.1.0 released (PyPI deferred) | fresh clone: `make setup`, `noirwrit install-model`, `make demo` writes and exports a chapter; 85 tests pass there; README, CI, issue templates, name check (`docs/NAME_CHECK.md`) |
 
 ## Prose quality
 
@@ -25,7 +25,11 @@ The trained base model writes grammatical, period-style English (see `docs/sampl
 - GitHub: public at github.com/tejgokani/noirwrit, `main` and the phase tags pushed, CI green.
 - Hugging Face: weights public at huggingface.co/tejgokani/noirwrit-base (GGUF Q8_0 and Q4_K_M, fp16 PyTorch, tokenizer, model card). `noirwrit install-model` downloads them; verified byte-identical.
 
-## Next
+- GitHub release v0.1.0, with the weights linked on the Hub.
+- PyPI: deferred by the user. The name `noirwrit` was free on 2026-10-29; re-check before publishing (`docs/NAME_CHECK.md`).
 
-1. Publish `noirwrit` 0.1.0 to PyPI (the name is free; needs a PyPI API token from the user).
-2. Then tag `v0.1.0` and `phase-11-done`, and create the GitHub release.
+## Possible next steps
+
+- Publish to PyPI.
+- Genre-specific lead-ins for classic detective and thriller beats (today every genre opens scenes in the noir voice).
+- An optional fine-tune on stories the user rated (about $2 to $5 on a rented GPU).

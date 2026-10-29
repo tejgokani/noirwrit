@@ -31,3 +31,4 @@ Each entry: date, decision, reason.
 - **Memory on the T4.** Micro-batch 16 at a 2048 context ran out of memory for both base and small. The probe now halves the micro-batch and doubles gradient accumulation on out-of-memory, keeping 65,536 tokens per step (the run used 8 x 4).
 - **Released weights are fp16.** `final-weights.pt` holds the best noir-stage checkpoint without optimizer state (210 MB instead of about 1.2 GB), since this Mac's connection is slow. Full checkpoints stay on Kaggle for resume.
 - **Name check.** "Noirwrit" is free on PyPI, npm, GitHub and Hugging Face. One similar project, NoirWriter (GitHub, Dharun1704), is logged in `docs/NAME_CHECK.md`. Not renamed; the user decides. The USPTO search could not be scripted and is listed as a manual step.
+- **PyPI deferred.** The user chose to release v0.1.0 on GitHub and Hugging Face without a PyPI package for now. Install is from a clone (`make setup`).
