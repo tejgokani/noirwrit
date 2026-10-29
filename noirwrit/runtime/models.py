@@ -81,3 +81,26 @@ def load_generator(db: DB | None = None, quality: str = "balanced") -> Generator
         return TorchGenerator(pick["path"], device="cpu", int8=True, temperature=temp)
     except Exception:
         return EchoGenerator()
+
+
+HF_REPO = "tejgokani/noirwrit-base"  # where release weights are published
+HF_FILE = "noirwrit-base-q8_0.gguf"
+
+
+def install_model(source: str = "") -> str:
+    """Copy or download a GGUF into ~/.noirwrit/models. Setup step; the app itself never downloads."""
+    dest_dir = HOME / "models"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    local = Path(source).expanduser() if source else ROOT / "artifacts" / "base" / "export" / HF_FILE
+    if local.suffix == ".gguf" and local.exists():
+        dest = dest_dir / local.name
+        if dest.resolve() != local.resolve():
+            shutil.copy(local, dest)
+        return f"installed {dest}"
+    repo = source if source and "/" in source and not source.endswith(".gguf") else HF_REPO
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        return "huggingface_hub is not installed: pip install huggingface_hub, or pass a local .gguf path"
+    path = hf_hub_download(repo, HF_FILE, local_dir=str(dest_dir))
+    return f"installed {path} from {repo}"

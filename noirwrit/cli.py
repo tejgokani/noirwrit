@@ -28,6 +28,15 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--words", type=int, default=3000)
     n.add_argument("--seed", type=int, default=0)
 
+    d = sub.add_parser("demo", help="write a short story with the installed model and export PDF and EPUB")
+    d.add_argument("--out", default="noirwrit-demo")
+    d.add_argument("--chapters", type=int, default=1)
+    d.add_argument("--words", type=int, default=1500)
+
+    im = sub.add_parser("install-model", help="install a GGUF model into ~/.noirwrit/models")
+    im.add_argument("source", nargs="?", default="",
+                    help="a local .gguf file, or a Hugging Face repo id; default: this checkout's trained base model")
+
     e = sub.add_parser("export", help="export a story")
     e.add_argument("story_id", type=int)
     e.add_argument("--fmt", default="pdf", choices=["pdf", "epub", "txt", "md"])
@@ -74,6 +83,13 @@ def main(argv: list[str] | None = None) -> int:
         eng.write_story(sid, progress=show)
         print(f"\n\ndone: story {sid}")
         return 0
+    if a.cmd == "install-model":
+        from noirwrit.runtime.models import install_model
+
+        print(install_model(a.source))
+        return 0
+    if a.cmd == "demo":
+        return demo(a.out, a.chapters, a.words)
     if a.cmd == "export":
         from pathlib import Path
 
@@ -99,6 +115,46 @@ def main(argv: list[str] | None = None) -> int:
         print(out)
         return 0
     p.print_help()
+    return 0
+
+
+def demo(out_dir: str, chapters: int, words: int) -> int:
+    """End-to-end check for a fresh install: plan, write, export. Uses a throwaway database."""
+    import tempfile
+    import time
+    from pathlib import Path
+
+    from noirwrit.export import books as ex
+    from noirwrit.memory.db import DB
+    from noirwrit.memory.store import Memory
+    from noirwrit.planner.spec import Spec
+    from noirwrit.planner.story import StoryEngine, create_story
+    from noirwrit.runtime.models import load_generator, pick_model
+
+    pick = pick_model()
+    print(f"model: {pick['path'] if pick else 'none installed (run: noirwrit install-model); using the stand-in generator'}")
+    with tempfile.TemporaryDirectory() as tmp:
+        db = DB(Path(tmp) / "demo.db")
+        eng = StoryEngine(db, Memory(db), load_generator(db))
+        sid = create_story(db, Spec(chapters=chapters, chapter_words=words, seed=int(time.time()) % 10000))
+        title = db.one("SELECT title FROM stories WHERE id=?", (sid,))["title"]
+        print(f"writing \"{title}\"...", flush=True)
+        t0 = time.time()
+
+        def show(ev: dict) -> None:
+            if ev["event"] == "scene_done":
+                print(f"  chapter {ev['chapter']}, scene {ev['scene']}/{ev['of']} ({ev['tokens']} tokens)", flush=True)
+
+        eng.write_story(sid, progress=show)
+        rows = db.query("SELECT title, text FROM chapters WHERE story_id=? ORDER BY num", (sid,))
+        book = ex.Book(title, [(r["title"], r["text"]) for r in rows])
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        pdf = ex.to_pdf(book, out / "demo.pdf")
+        epub = ex.to_epub(book, out / "demo.epub")
+        (out / "demo.md").write_text(ex.to_md(book))
+    words_out = sum(len(r["text"].split()) for r in rows)
+    print(f"done: {words_out} words in {time.time() - t0:.0f} s -> {pdf}, {epub}, {out / 'demo.md'}")
     return 0
 
 
