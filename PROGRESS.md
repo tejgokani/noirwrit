@@ -13,8 +13,8 @@ Last updated 2026-10-29 (evening).
 | 7. Memory | done | ingest, retrieval accuracy, duplicate detection tests pass |
 | 8. Story engine | done | tiny model wrote a 5-chapter story end to end; checker catches a planted name error |
 | 9. Worker and ETA | done | SIGKILL mid-chapter then resume finishes without rewriting saved scenes; real ETA error 4% |
-| 10. Interface | mostly done | all screens, live typing, exports verified in the browser; still to do: offline run with network blocked, epubcheck |
-| 11. Packaging | not started | |
+| 10. Interface | done | all screens and live typing verified in the browser; full flow passes with the network blocked (14/14); EPUB passes epubcheck; 12-chapter PDF gates pass in four page sizes (`docs/GATES.md`) |
+| 11. Packaging | done locally; release waiting for your OK | fresh clone: `make setup`, `noirwrit install-model`, `make demo` writes and exports a chapter; 85 tests pass there; README, CI, issue templates, name check (`docs/NAME_CHECK.md`) |
 
 ## Prose quality
 
@@ -22,5 +22,8 @@ The trained base model writes grammatical, period-style English (see `docs/sampl
 
 ## Next
 
-1. Phase 10: run the full flow with the network blocked, and validate EPUBs with epubcheck.
-2. Phase 11: `make setup` from a clean clone, README with the architecture diagram and honest limits, name check, CI, and (with your OK) the public GitHub repo, PyPI and Hugging Face release.
+Release, each step only with the user's OK:
+1. Create the public GitHub repo `tejgokani/noirwrit` and push `main` with the phase tags.
+2. Upload the weights to the Hugging Face Hub as `tejgokani/noirwrit-base` (needs a Hugging Face write token).
+3. Publish `noirwrit` 0.1.0 to PyPI (the name is free; needs a PyPI token).
+4. Tag `v0.1.0` and `phase-11-done`.
