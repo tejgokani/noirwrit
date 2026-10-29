@@ -54,19 +54,24 @@ def _rank(m: dict) -> tuple:
     return (size, gguf_ok, "q8" in name, "best" in name)
 
 
+def pick_model(db: DB | None = None) -> dict | None:
+    """The model the worker will load: the one chosen in Settings, else the best ranked."""
+    chosen = db.get_setting("model_path") if db else None
+    models = list_models()
+    if chosen and Path(chosen).exists():
+        return next((m for m in models if m["path"] == chosen),
+                    {"path": chosen, "kind": "gguf" if chosen.endswith(".gguf") else "torch", "name": Path(chosen).stem})
+    return max(models, key=_rank) if models else None
+
+
 def load_generator(db: DB | None = None, quality: str = "balanced") -> Generator:
     # Test hook: NOIRWRIT_GENERATOR=echo:<tok_per_s> runs the deterministic stand-in at that speed.
     forced = os.environ.get("NOIRWRIT_GENERATOR", "")
     if forced.startswith("echo"):
         rate = float(forced.split(":", 1)[1]) if ":" in forced else 5000.0
         return EchoGenerator(tok_per_s=rate, simulate_speed=":" in forced)
-    chosen = db.get_setting("model_path") if db else None
-    models = list_models()
-    if chosen and Path(chosen).exists():
-        pick = next((m for m in models if m["path"] == chosen), {"path": chosen, "kind": "gguf" if chosen.endswith(".gguf") else "torch"})
-    elif models:
-        pick = max(models, key=_rank)
-    else:
+    pick = pick_model(db)
+    if pick is None:
         return EchoGenerator()
     # Lower temperature reads more grammatical; best-of-N reranking adds the variety back.
     temp = {"fast": 0.7, "balanced": 0.75, "quality": 0.8}.get(quality, 0.75)

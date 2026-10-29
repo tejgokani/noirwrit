@@ -33,7 +33,7 @@ from noirwrit.memory.db import DB
 from noirwrit.memory.store import Memory, match_spec
 from noirwrit.planner.spec import QUESTIONS, Spec
 from noirwrit.planner.story import create_story, load_story
-from noirwrit.runtime.models import list_models
+from noirwrit.runtime.models import list_models, pick_model
 from noirwrit.worker import enqueue_chapter, eta_seconds, tok_rate
 
 STATIC = Path(__file__).parent / "static"
@@ -300,11 +300,11 @@ def api_status():
     q = {r["status"]: r["n"] for r in S.db.query("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     running = S.db.one("SELECT payload, progress, heartbeat FROM jobs WHERE status='running' ORDER BY id LIMIT 1")
     alive = bool(S.worker and S.worker.poll() is None) or bool(running and running["heartbeat"] and time.time() - running["heartbeat"] < 30)
-    models = list_models()
+    pick = pick_model(S.db)
     return {"version": __version__, "worker_alive": alive, "queue": q, "tok_per_s": round(tok_rate(S.db), 1),
             "running": ({**json.loads(running["payload"]), **(json.loads(running["progress"]) if running["progress"] else {})}
                         if running else None),
-            "model": settings()["model_path"] or (models[0]["path"] if models else "echo (no model installed)"),
+            "model": pick["path"] if pick else "echo (no model installed)",
             "embedder": S.mem.emb.name}
 
 

@@ -92,8 +92,13 @@ def main() -> int:
     targets = []
     if Path(a.tiny).exists():
         targets.append(("tiny (trained)", Path(a.tiny)))
+    trained = {p: ROOT / "artifacts" / p / "best.pt" for p in ("small", "base")}
     for p in a.presets.split(","):
-        if p:
+        if not p:
+            continue
+        if trained.get(p) and trained[p].exists():
+            targets.append((f"{p} (trained)", trained[p]))
+        else:
             targets.append((f"{p} (random weights)", make_ckpt(p)))
 
     results = []
@@ -134,7 +139,7 @@ def main() -> int:
         f"Machine: {meta['machine']}. Date: {meta['date']}. {meta['llama_cpp']}.",
         "",
         "Generation speed feeds the ETA shown in the app (the worker keeps a rolling average of real tok/s).",
-        "Small and base rows use random weights in the exact trained layout; speed and memory do not depend on what the weights learned.",
+        "Rows marked random weights use the exact trained layout; speed and memory do not depend on what the weights learned.",
         "",
         "| Model | Params | Runtime | File | Gen tok/s | Prompt tok/s | Peak RAM |",
         "|---|---|---|---|---|---|---|",

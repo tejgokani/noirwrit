@@ -46,6 +46,8 @@ class Plan:
     usd: float
     source: str  # estimate | probe
     note: str = ""
+    micro_batch: int = 0
+    accum: int = 0
 
 
 def params_of(preset: str) -> int:
@@ -98,17 +100,33 @@ def choose(corpus: int, tok_s_by_preset: dict[str, float], usd_hr: float, budget
     return small
 
 
-def probe(preset: str, shards: Path, micro_batch: int, accum: int, minutes: float = 2.0) -> float:
-    """Train for a couple of minutes and return the median measured tok/s (after warmup)."""
-    with tempfile.TemporaryDirectory() as tmp:
-        cmd = [sys.executable, "-m", "noirwrit.train.train", "--preset", preset, "--shards", str(shards),
-               "--out", tmp, "--micro-batch", str(micro_batch), "--accum", str(accum), "--max-steps", "100000",
-               "--max-minutes", str(minutes), "--eval-every", "100000", "--sample-every", "0", "--ckpt-every-min", "1000"]
-        subprocess.run(cmd, check=True, capture_output=True)
-        rates = [json.loads(line)["tok_per_s"] for line in (Path(tmp) / "train_log.jsonl").read_text().splitlines()
-                 if '"tok_per_s"' in line]
-    rates = sorted(rates[len(rates) // 3:]) or [1.0]  # drop warmup
-    return float(rates[len(rates) // 2])
+def probe(preset: str, shards: Path, micro_batch: int, accum: int, minutes: float = 2.0) -> tuple[float, int, int]:
+    """Train for a couple of minutes; return (median tok/s after warmup, micro_batch, accum).
+
+    On out-of-memory it halves the micro-batch and doubles accumulation, so the
+    tokens per optimizer step stay the same. Other failures raise with the
+    subprocess's own error message.
+    """
+    mb, acc = micro_batch, accum
+    while mb >= 1:
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = [sys.executable, "-m", "noirwrit.train.train", "--preset", preset, "--shards", str(shards),
+                   "--out", tmp, "--micro-batch", str(mb), "--accum", str(acc), "--max-steps", "100000",
+                   "--max-minutes", str(minutes), "--eval-every", "100000", "--sample-every", "0",
+                   "--ckpt-every-min", "1000"]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode == 0:
+                rates = [json.loads(line)["tok_per_s"] for line in (Path(tmp) / "train_log.jsonl").read_text().splitlines()
+                         if '"tok_per_s"' in line]
+                rates = sorted(rates[len(rates) // 3:]) or [1.0]  # drop warmup
+                return float(rates[len(rates) // 2]), mb, acc
+        err = (r.stderr or r.stdout)[-3000:]
+        if "out of memory" in err.lower() and mb > 1:
+            print(f"{preset}: out of memory at micro-batch {mb}; retrying at {mb // 2}", file=sys.stderr, flush=True)
+            mb, acc = mb // 2, acc * 2
+            continue
+        raise RuntimeError(f"probe for {preset} failed (micro-batch {mb}):\n{err}")
+    raise RuntimeError(f"probe for {preset}: out of memory even at micro-batch 1")
 
 
 def report(plan: Plan, corpus: int, gpu: str, budget: float) -> str:
@@ -142,13 +160,18 @@ def main(argv: list[str] | None = None) -> int:
     corpus = corpus_tokens(shards)
     usd_hr = GPUS[a.gpu]["usd_per_hour"] if a.cost_per_hour is None else a.cost_per_hour
     tps_step = a.micro_batch * a.accum * a.ctx
+    batch = {p: (a.micro_batch, a.accum) for p in ("base", "small")}
     if a.probe:
-        rates = {p: probe(p, shards, a.micro_batch, a.accum) for p in ("base", "small")}
+        rates = {}
+        for p in ("base", "small"):
+            rate, mb, acc = probe(p, shards, a.micro_batch, a.accum)
+            rates[p], batch[p] = rate, (mb, acc)
         source = "probe"
     else:
         rates = {p: tok_per_s_estimate(params_of(p), a.gpu) for p in ("base", "small")}
         source = "estimate"
     plan = choose(corpus, rates, usd_hr, a.budget_usd, a.max_hours, tps_step, source)
+    plan.micro_batch, plan.accum = batch[plan.preset]
     print(report(plan, corpus, a.gpu, a.budget_usd))
     if a.json:
         Path(a.json).write_text(json.dumps(asdict(plan), indent=2))

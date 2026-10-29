@@ -1,7 +1,7 @@
 {
   "meta": {
     "machine": "Apple M3, 16 GB, macOS 27.0.1",
-    "date": "2026-10-28",
+    "date": "2026-10-29",
     "llama_cpp": "version: 0.4.1 (build 10964, commit b29c606e2)"
   },
   "results": [
@@ -10,56 +10,56 @@
       "params_m": 4.9,
       "runtime": "llama.cpp Q8_0",
       "file_mb": 9.1,
-      "prompt_tok_s": 58265.4,
+      "prompt_tok_s": 80174.1,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 1190.3,
+      "gen_tok_s": 1601.1,
       "peak_ram_gb": 0.093,
-      "seconds": 1.0
+      "seconds": 0.9
     },
     {
       "model": "tiny (trained)",
       "params_m": 4.9,
       "runtime": "llama.cpp Q4_K_M",
       "file_mb": 7.3,
-      "prompt_tok_s": 87158.3,
+      "prompt_tok_s": 63501.0,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 1536.7,
+      "gen_tok_s": 596.3,
       "peak_ram_gb": 0.092,
-      "seconds": 1.0
+      "seconds": 1.4
     },
     {
       "model": "tiny (trained)",
       "params_m": 4.9,
       "runtime": "PyTorch CPU int8",
-      "gen_tok_s": 241.39,
-      "prefill_s": 0.0127
+      "gen_tok_s": 232.72,
+      "prefill_s": 0.0109
     },
     {
       "model": "tiny (trained)",
       "params_m": 4.9,
       "runtime": "PyTorch CPU fp32",
-      "gen_tok_s": 321.86,
-      "prefill_s": 0.0055
+      "gen_tok_s": 332.97,
+      "prefill_s": 0.0059
     },
     {
       "model": "small (random weights)",
       "params_m": 34.1,
       "runtime": "llama.cpp Q8_0",
       "file_mb": 45.7,
-      "prompt_tok_s": 29846.6,
+      "prompt_tok_s": 26432.9,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 588.1,
+      "gen_tok_s": 293.7,
       "peak_ram_gb": 0.153,
-      "seconds": 1.8
+      "seconds": 2.5
     },
     {
       "model": "small (random weights)",
       "params_m": 34.1,
       "runtime": "llama.cpp Q4_K_M",
       "file_mb": 28.7,
-      "prompt_tok_s": 31511.0,
+      "prompt_tok_s": 31420.4,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 740.0,
+      "gen_tok_s": 767.0,
       "peak_ram_gb": 0.137,
       "seconds": 1.6
     },
@@ -67,51 +67,51 @@
       "model": "small (random weights)",
       "params_m": 34.1,
       "runtime": "PyTorch CPU int8",
-      "gen_tok_s": 110.12,
-      "prefill_s": 0.0814
+      "gen_tok_s": 111.86,
+      "prefill_s": 0.0787
     },
     {
       "model": "small (random weights)",
       "params_m": 34.1,
       "runtime": "PyTorch CPU fp32",
-      "gen_tok_s": 166.82,
-      "prefill_s": 0.033
+      "gen_tok_s": 168.23,
+      "prefill_s": 0.0312
     },
     {
-      "model": "base (random weights)",
+      "model": "base (trained)",
       "params_m": 97.5,
       "runtime": "llama.cpp Q8_0",
       "file_mb": 117.6,
-      "prompt_tok_s": 10660.4,
+      "prompt_tok_s": 8704.9,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 213.4,
+      "gen_tok_s": 229.0,
       "peak_ram_gb": 0.259,
-      "seconds": 4.1
+      "seconds": 3.3
     },
     {
-      "model": "base (random weights)",
+      "model": "base (trained)",
       "params_m": 97.5,
       "runtime": "llama.cpp Q4_K_M",
       "file_mb": 69.2,
-      "prompt_tok_s": 10233.9,
+      "prompt_tok_s": 9934.5,
       "backend": "BLAS,MTL",
-      "gen_tok_s": 291.4,
+      "gen_tok_s": 298.3,
       "peak_ram_gb": 0.214,
       "seconds": 2.9
     },
     {
-      "model": "base (random weights)",
+      "model": "base (trained)",
       "params_m": 97.5,
       "runtime": "PyTorch CPU int8",
-      "gen_tok_s": 50.72,
-      "prefill_s": 0.2945
+      "gen_tok_s": 56.74,
+      "prefill_s": 0.3093
     },
     {
-      "model": "base (random weights)",
+      "model": "base (trained)",
       "params_m": 97.5,
       "runtime": "PyTorch CPU fp32",
-      "gen_tok_s": 66.6,
-      "prefill_s": 0.0979
+      "gen_tok_s": 67.58,
+      "prefill_s": 0.0944
     }
   ]
 }

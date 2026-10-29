@@ -181,3 +181,24 @@ def test_consistency_replaces_borrowed_names(env):
     # The same borrowed name maps to the same character every time.
     assert rep.fixed_text.count(speakers.pop()) >= 1
     assert {i.kind for i in rep.issues} == {"foreign_name"}
+
+
+def test_tidy_drops_copied_book_headings():
+    from noirwrit.planner.story import _tidy
+
+    text = "He went out.\n\nCHAPTER III.\n\nTHE SUPPERING GAME.\n\n\"STOP!\" she cried.\n\nThe rain kept on."
+    out = _tidy(text)
+    assert "CHAPTER" not in out and "SUPPERING" not in out
+    assert '"STOP!" she cried.' in out and out.endswith("The rain kept on.")
+
+
+def test_short_names_two_letters_off_are_not_typos(env):
+    db, _ = env
+    sid = create_story(db, Spec(seed=5, chapters=2))
+    bible = Bible.load(db, sid)
+    bible.characters["Gus Harrow"] = {"role": "suspect", "description": "x", "gender": "m", "alive": True,
+                                      "dies_in_chapter": None, "first_chapter": None}
+    _, _, outline = load_story(db, sid)
+    beat = outline.chapters[0]["beats"][0]
+    rep = consistency.check("Harry Gladstone came in.", bible, beat)
+    assert not any(i.kind == "name_typo" for i in rep.issues)

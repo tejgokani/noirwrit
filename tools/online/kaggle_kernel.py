@@ -20,6 +20,8 @@ import tarfile
 import time
 from pathlib import Path
 
+CODE_B64 = None  # replaced by the launcher with the code archive, so each push carries its own code
+
 T0 = time.time()
 SESSION_HOURS = 11.3  # Kaggle stops GPU sessions at 12 h; leave room to save
 # NW_KAGGLE_ROOT lets the launcher's tests dry-run this script against a fake /kaggle tree.
@@ -44,10 +46,17 @@ if not metas:
     sys.exit(1)
 data = metas[0].parent
 
-# 2. Code: an extracted noirwrit/ package, or the tar archive.
+# 2. Code: embedded in this script by the launcher, else from the dataset (extracted folder or tar).
 SRC.mkdir(parents=True, exist_ok=True)
 pkg = next(iter(INPUT.rglob("noirwrit/__init__.py")), None)
-if pkg is not None:
+if CODE_B64:
+    import base64
+    import io
+
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(CODE_B64)), mode="r:gz") as t:
+        t.extractall(SRC)
+    print("code: embedded in the kernel", flush=True)
+elif pkg is not None:
     shutil.copytree(pkg.parent, SRC / "noirwrit", dirs_exist_ok=True)
 else:
     tar = next(iter(INPUT.rglob("noirwrit_code.tar*")))
@@ -119,8 +128,9 @@ else:
 
 # 7. Train until the plan is done or the session clock runs out.
 left_min = SESSION_HOURS * 60 - (time.time() - T0) / 60
+mb, acc = plan.get("micro_batch") or MB, plan.get("accum") or ACCUM  # what the probe found fits in memory
 args = ["--preset", plan["preset"], "--shards", str(SHARDS), "--out", str(WORK),
-        "--micro-batch", str(MB), "--accum", str(ACCUM), "--max-steps", str(plan["steps"]),
+        "--micro-batch", str(mb), "--accum", str(acc), "--max-steps", str(plan["steps"]),
         "--lr", "6e-4" if plan["preset"] == "base" else "1e-3", "--warmup", "500",
         "--eval-every", "500", "--eval-iters", "40", "--sample-every", "2000",
         "--ckpt-every-min", "30", "--max-minutes", str(max(left_min, 5))]

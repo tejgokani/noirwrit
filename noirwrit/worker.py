@@ -201,7 +201,13 @@ def default_engine_factory(db: DB):
 
     quality = db.get_setting("quality", "balanced") or "balanced"
     candidates = {"fast": 1, "balanced": 1, "quality": 3}.get(quality, 1)
-    return StoryEngine(db, Memory(db), load_generator(db, quality=quality), candidates=candidates)
+    gen = load_generator(db, quality=quality)
+    # The rolling speed belongs to one model; start over when the model changes so ETAs stay honest.
+    key = f"{getattr(gen, 'gguf', None) or getattr(gen, 'ckpt', None) or gen.name}:{candidates}"
+    if db.get_setting("rate_model") != key:
+        db.set_setting("tok_per_s", 0.0)
+        db.set_setting("rate_model", key)
+    return StoryEngine(db, Memory(db), gen, candidates=candidates)
 
 
 def main(argv: list[str] | None = None) -> int:

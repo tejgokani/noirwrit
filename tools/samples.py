@@ -69,7 +69,8 @@ def main() -> int:
         print(json.dumps({"story": sid, "title": title, "words": words, "seconds": round(secs, 1),
                           "fixes": fixes[:5]}), flush=True)
     (out / "README.md").write_text("\n".join(index) + "\n")
-    db_path.unlink(missing_ok=True)
+    for p in (db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")):
+        p.unlink(missing_ok=True)
     return 0
 
 

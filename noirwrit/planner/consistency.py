@@ -107,7 +107,8 @@ def check(text: str, bible: Bible, beat: Beat) -> Report:
             d = edit_distance(tok, k)
             if d < dist:
                 best, dist = k, d
-        if best and dist <= (1 if len(best) <= 4 else 2) and tok[0] == best[0]:
+        # One letter off is a typo; two letters off only for long names (Harry is not Harrow).
+        if best and tok[0] == best[0] and (dist == 1 or (dist == 2 and min(len(tok), len(best)) >= 7)):
             rep.issues.append(Issue("name_typo", f"{tok} -> {best}", True, (tok, best)))
     for iss in rep.issues:
         if iss.fix:

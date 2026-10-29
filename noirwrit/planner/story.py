@@ -90,12 +90,26 @@ def _trim_to_sentence(text: str) -> str:
     return text[: m[-1].end()].strip() if m else text.strip()
 
 
+HEADING_RE = re.compile(r"^(chapter|book|part|volume|section)\b[\s\w.,:-]{0,60}$|^(the end|finis)\.?$", re.I)
+
+
+def _is_heading(para: str) -> bool:
+    """Book furniture the model copies from its training books: 'CHAPTER III.', 'THE SUPPERING GAME.'"""
+    p = para.strip()
+    if HEADING_RE.match(p):
+        return True
+    words = p.split()
+    letters = [c for c in p if c.isalpha()]
+    return 0 < len(words) <= 10 and bool(letters) and all(c.isupper() for c in letters) and not p.startswith('"')
+
+
 def _tidy(text: str) -> str:
     text = text.replace("\r", "")
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
     # Strip any leaked control tokens.
     text = re.sub(r"<(pad|bos|eos|spec|beat|summary|bible|chapter|scene)>", "", text)
+    paras = [p.strip() for p in re.split(r"\n\s*\n|\n(?=[A-Z\"])", text)]
+    text = "\n\n".join(p for p in paras if p and not _is_heading(p))
     return text.strip()
 
 

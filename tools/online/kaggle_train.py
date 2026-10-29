@@ -52,11 +52,27 @@ def kaggle_exe() -> str:
     return str(local) if local.exists() else (shutil.which("kaggle") or "kaggle")
 
 
-def kaggle(*args: str, check: bool = True, timeout: int = 7200) -> str:
-    r = subprocess.run([kaggle_exe(), *args], capture_output=True, text=True, timeout=timeout)
-    if check and r.returncode != 0:
-        raise RuntimeError(f"kaggle {' '.join(args[:2])} failed: {(r.stderr or r.stdout).strip()[-800:]}")
-    return r.stdout + r.stderr
+TRANSIENT = ("SSLError", "SSLEOFError", "ConnectionError", "ConnectionResetError", "ReadTimeout", "Timeout",
+             "Max retries exceeded", "RemoteDisconnected", "502", "503", "504", "429")
+
+
+def kaggle(*args: str, check: bool = True, timeout: int = 7200, retries: int = 8) -> str:
+    """Run the Kaggle CLI, retrying network blips (this Mac's connection drops now and then)."""
+    for attempt in range(retries):
+        try:
+            r = subprocess.run([kaggle_exe(), *args], capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            out, rc = "Timeout", 1
+        else:
+            out, rc = r.stdout + r.stderr, r.returncode
+        if rc == 0 or not any(t in out for t in TRANSIENT):
+            break
+        wait = min(30 * 2**attempt, 600)
+        log(f"network error on kaggle {' '.join(args[:2])}; retrying in {wait}s")
+        time.sleep(wait)
+    if check and rc != 0:
+        raise RuntimeError(f"kaggle {' '.join(args[:2])} failed: {out.strip()[-800:]}")
+    return out
 
 
 def username() -> str:
@@ -73,6 +89,27 @@ def username() -> str:
     if not m or m.group(1) == "None":
         sys.exit("Could not read the Kaggle username; run `kaggle config view`.")
     return m.group(1)
+
+
+def code_archive() -> bytes:
+    """The noirwrit package as a .tar.gz (no caches, no web assets)."""
+    import io
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as t:
+        t.add(ROOT / "noirwrit", "noirwrit",
+              filter=lambda i: None if "__pycache__" in i.name or i.name.endswith(".pyc") or "/static" in i.name else i)
+    return buf.getvalue()
+
+
+def kernel_source() -> str:
+    """kaggle_kernel.py with the current code embedded. Dataset versions can lag behind a push; this cannot."""
+    import base64
+
+    src = (ROOT / "tools" / "online" / "kaggle_kernel.py").read_text()
+    marker = "CODE_B64 = None  # replaced by the launcher"
+    assert marker in src
+    return src.replace(marker, f'CODE_B64 = "{base64.b64encode(code_archive()).decode()}"  # embedded by the launcher', 1)
 
 
 def build_dataset(user: str) -> Path:
@@ -125,7 +162,7 @@ def push_kernel(user: str, slug: str, resume_from: str | None) -> None:
     if d.exists():
         shutil.rmtree(d)
     d.mkdir(parents=True)
-    shutil.copy(ROOT / "tools" / "online" / "kaggle_kernel.py", d / "kaggle_kernel.py")
+    (d / "kaggle_kernel.py").write_text(kernel_source())
     meta = {
         "id": f"{user}/{slug}", "title": slug, "code_file": "kaggle_kernel.py", "language": "python",
         "kernel_type": "script", "is_private": "true", "enable_gpu": "true", "enable_tpu": "false",
@@ -214,9 +251,7 @@ def main() -> int:
         while st in ("running", "queued", "unknown"):
             time.sleep(a.poll_min * 60)
             st = status(ref)
-            peek = fetch(ref, WORK / "peek", r"^status\.json$") / "status.json" if st == "running" else None
-            info = json.loads(peek.read_text()) if peek and peek.exists() else {}
-            log(f"{ref}: {st} {info.get('state', '')} step {info.get('step', '?')}")
+            log(f"{ref}: {st}")
         out = fetch(ref, WORK / f"out-{state['session']}", SMALL_FILES)
         if (out / "DONE.json").exists():
             finish(ref, out)
