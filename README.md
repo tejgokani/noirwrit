@@ -8,6 +8,8 @@ You answer a short questionnaire (or leave it blank), and Noirwrit plans the mys
 >
 > from a chapter written by `noirwrit-base` ([more samples](docs/samples/README.md))
 
+Model weights: [huggingface.co/tejgokani/noirwrit-base](https://huggingface.co/tejgokani/noirwrit-base) (GGUF Q8_0 and Q4_K_M, fp16 PyTorch, tokenizer). `make model` downloads them.
+
 ## Quickstart (macOS)
 
 ```bash
