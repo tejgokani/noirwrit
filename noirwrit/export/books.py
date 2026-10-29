@@ -257,6 +257,11 @@ def to_epub(book: Book, out: Path, opts: ExportOptions | None = None) -> Path:
     eb.add_metadata("DC", "publisher", "Noirwrit")
     if opts.include_cover:
         eb.set_cover("cover.png", cover_png(book.title, book.author))
+        # ebooklib marks its cover page non-linear, and epubcheck (OPF-096) rejects non-linear
+        # pages nothing links to. The cover is simply the first page of the reading order.
+        for it in eb.get_items():
+            if isinstance(it, epub.EpubCoverHtml):
+                it.is_linear = True
     css = epub.EpubItem(uid="style", file_name="style/book.css", media_type="text/css", content=EPUB_CSS)
     eb.add_item(css)
 
