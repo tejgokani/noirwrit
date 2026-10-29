@@ -4,8 +4,8 @@ The real `base` model (98M parameters) trains on a free Kaggle GPU. The Mac only
 
 ## What you do (three steps, once)
 
-1. Sign in at kaggle.com, verify your phone number (Kaggle requires it for GPUs), then open **Settings, API, Create New Token**. This downloads `kaggle.json`.
-2. Run `mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json`
+1. Sign in at kaggle.com, verify your phone number (Kaggle requires it for GPUs), then open **Settings, API, Create New Token**. Kaggle shows a token that starts with `KGAT_`.
+2. Save it: `mkdir -p ~/.kaggle && printf '%s' 'KGAT_...' > ~/.kaggle/access_token && chmod 600 ~/.kaggle/access_token` (the older `kaggle.json` file also works).
 3. Run `make train-online`
 
 Everything else is automatic. Cost: $0.
@@ -14,15 +14,15 @@ Everything else is automatic. Cost: $0.
 
 `make train-online` runs `tools/online/kaggle_train.py`, which:
 
-1. Uploads the code, the tokenizer and the packed shards as a private Kaggle dataset, `noirwrit-data` (public domain text only).
-2. Pushes a private GPU kernel, `noirwrit-train-a`. On Kaggle it:
+1. Uploads a private Kaggle dataset, `noirwrit-data`: the code as one tar file, the shards gzipped (about 230 MB), and `meta.json`. Public domain text only.
+2. Pushes a private T4 GPU kernel, `noirwrit-train-a`. On Kaggle it:
    - measures real tokens per second for two minutes on whatever GPU Kaggle assigned (T4 or P100),
    - logs the plan: FLOPs ~ 6 x params x tokens, hours, and dollars ($0 on Kaggle),
    - picks `base` if at least one epoch fits the time cap, otherwise `small`, and up to 4 epochs,
    - trains in three stages (general fiction, crime and detective, then the noir set at a lower learning rate with early stopping), with fp16 on a T4, `torch.compile`, fused AdamW and SDPA attention,
    - checkpoints every 30 minutes.
 3. Polls every 5 minutes. Kaggle stops a GPU session at 12 hours. If training is not finished by then, the launcher pushes `noirwrit-train-b` with the first session's output attached, and it resumes from `latest.pt`. It alternates until the run finishes.
-4. Downloads `best.pt` and `latest.pt` to `artifacts/base/` (or `artifacts/small/`), then exports GGUF Q8_0 and Q4_K_M.
+4. While training, downloads only `status.json` and the log. Full checkpoints (about 1.2 GB with optimizer state) stay on Kaggle, where the next session mounts them. At the end it downloads only `final-weights.pt` (fp16, about 195 MB) to `artifacts/base/best.pt` (or `artifacts/small/`), then exports GGUF Q8_0 and Q4_K_M.
 
 Check on it any time with `python tools/online/kaggle_train.py --status`, or watch `logs/online.log`.
 
